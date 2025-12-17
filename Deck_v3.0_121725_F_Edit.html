@@ -3170,21 +3170,28 @@ function updateSlide() {
 
 // --- FUNGSI CHECK DISCLAIMER (Mengontrol tombol Webflow) ---
 function checkDisclaimerStatus() {
-    // Logika untuk menonaktifkan/mengaktifkan tombol next di Webflow
     let nextDisabled = false;
     if (currentSlide === 1 && checkbox && !checkbox.checked) {
         nextDisabled = true;
         if (statusDiv) {
             statusDiv.innerHTML = '<p class="text-gray-500 text-sm">Please check the box above to acknowledge and proceed</p>';
         }
+    } else if (currentSlide === 1 && checkbox && checkbox.checked) {
+        // Tambahkan ini agar muncul pesan sukses saat dicentang
+        if (statusDiv) {
+            statusDiv.innerHTML = `
+                <div class="flex items-center justify-center gap-2 text-green-400">
+                    <span style="font-size: 20px;">✓</span>
+                    <p class="text-sm font-semibold">Acknowledged. Use arrow keys or buttons to continue.</p>
+                </div>`;
+        }
     } else {
         if (statusDiv) {
-            // Ini akan menjalankan kode ini di semua slide selain slide 2 (index 1)
             statusDiv.innerHTML = ''; 
         }
     }
 
-    // 2. KIRIM STATUS DISABLE/ENABLE TOMBOL KE HALAMAN INDUK
+    // Kirim status ke Webflow
     if (window.parent) {
          window.parent.postMessage({
             type: 'navControl',
