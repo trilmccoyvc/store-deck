@@ -3122,119 +3122,121 @@
 </div>
 </div>
 
-    <script>
+   <script>
     let currentSlide = 0;
-// Mengambil semua elemen slide dari dalam #slideContent
-const slides = document.querySelectorAll('.slide'); 
-const totalSlides = slides.length;
+    // Mengambil semua elemen slide dari dalam #slideContent
+    const slides = document.querySelectorAll('.slide'); 
+    const totalSlides = slides.length;
 
-// Elemen ini harus tetap ada jika digunakan di Slide 2
-const checkbox = document.getElementById('acknowledge-checkbox'); 
-const statusDiv = document.getElementById('acknowledge-status');
+    // PERBAIKAN: ID harus sesuai dengan HTML (acknowledge-deck)
+    const checkbox = document.getElementById('acknowledge-deck'); 
+    // Pastikan di HTML slide 2 Anda menambahkan <div id="acknowledge-status"></div>
+    const statusDiv = document.getElementById('acknowledge-status');
 
-// --- FUNGSI NAVIGASI ---
-function nextSlide() {
-    // Logika cek disclaimer
-    if (currentSlide === 1 && checkbox && !checkbox.checked) {
-        console.log("Disclaimer must be acknowledged to proceed.");
-        return;
-    }
-    if (currentSlide < totalSlides - 1) {
-        currentSlide = currentSlide + 1;
-    }
-    updateSlide();
-}
-
-function prevSlide() {
-    if (currentSlide > 0) {
-        currentSlide = (currentSlide - 1); 
-        updateSlide();
-    }
-}
-
-// --- FUNGSI UPDATE SLIDE (Termasuk pengiriman status ke Webflow) ---
-function updateSlide() {
-    slides.forEach(slide => slide.classList.remove('active'));
-    
-    if (slides[currentSlide]) {
-        slides[currentSlide].classList.add('active');
-        document.getElementById('slideContent').scrollTop = 0;
+    // --- FUNGSI NAVIGASI ---
+    function nextSlide() {
+        // Logika cek disclaimer (Slide index 1 adalah slide ke-2)
+        if (currentSlide === 1 && checkbox && !checkbox.checked) {
+            console.log("Disclaimer must be acknowledged to proceed.");
+            // Beri tahu user secara visual jika mereka belum klik
+            if (statusDiv) {
+                statusDiv.innerHTML = '<p style="color: #f87171; font-weight: bold;">Please check the box to proceed!</p>';
+            }
+            return;
+        }
         
-        // 1. KIRIM STATUS SLIDE KE HALAMAN INDUK (WEBFLOW)
+        if (currentSlide < totalSlides - 1) {
+            currentSlide = currentSlide + 1;
+            updateSlide();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlide > 0) {
+            currentSlide = currentSlide - 1; 
+            updateSlide();
+        }
+    }
+
+    // --- FUNGSI UPDATE SLIDE ---
+    function updateSlide() {
+        slides.forEach(slide => slide.classList.remove('active'));
+        
+        if (slides[currentSlide]) {
+            slides[currentSlide].classList.add('active');
+            
+            // Perbaikan Scroll: Gunakan window.scrollTo karena body sekarang min-h-screen
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            // 1. KIRIM STATUS SLIDE KE HALAMAN INDUK (WEBFLOW)
+            if (window.parent) {
+                window.parent.postMessage({
+                    type: 'slideUpdate',
+                    current: currentSlide + 1,
+                    total: totalSlides,
+                    title: slides[currentSlide].getAttribute('data-title') || ''
+                }, '*');
+            }
+        }
+        
+        checkDisclaimerStatus();
+    }
+
+    // --- FUNGSI CHECK DISCLAIMER ---
+    function checkDisclaimerStatus() {
+        let nextDisabled = false;
+        
+        // Cek jika sedang di slide disclaimer
+        if (currentSlide === 1 && checkbox) {
+            if (!checkbox.checked) {
+                nextDisabled = true;
+            } else {
+                if (statusDiv) statusDiv.innerHTML = ''; // Hilangkan peringatan jika sudah dicentang
+            }
+        }
+
+        // 2. KIRIM STATUS KE WEBFLOW
         if (window.parent) {
-            window.parent.postMessage({
-                type: 'slideUpdate',
-                current: currentSlide + 1,
-                total: totalSlides,
-                title: slides[currentSlide].getAttribute('data-title') || ''
-            }, '*'); // Ganti '*' dengan domain Webflow Anda untuk keamanan
-        }
-    }
-    
-    // Logika cek disclaimer (akan mengirim status disable tombol ke Webflow)
-    checkDisclaimerStatus();
-}
-
-// --- FUNGSI CHECK DISCLAIMER (Mengontrol tombol Webflow) ---
-function checkDisclaimerStatus() {
-    // Logika untuk menonaktifkan/mengaktifkan tombol next di Webflow
-    let nextDisabled = false;
-    if (currentSlide === 1 && checkbox && !checkbox.checked) {
-        nextDisabled = true;
-        if (statusDiv) {
-            statusDiv.innerHTML = '<p class="text-gray-500 text-sm">Please check the box above to acknowledge and proceed</p>';
-        }
-    } else {
-        if (statusDiv) {
-            // Ini akan menjalankan kode ini di semua slide selain slide 2 (index 1)
-            statusDiv.innerHTML = ''; 
+             window.parent.postMessage({
+                type: 'navControl',
+                nextDisabled: nextDisabled,
+                isFirstSlide: currentSlide === 0,
+                isLastSlide: currentSlide === totalSlides - 1
+            }, '*');
         }
     }
 
-    // 2. KIRIM STATUS DISABLE/ENABLE TOMBOL KE HALAMAN INDUK
-    if (window.parent) {
-         window.parent.postMessage({
-            type: 'navControl',
-            nextDisabled: nextDisabled,
-            isFirstSlide: currentSlide === 0
-        }, '*');
+    // Tambahkan listener jika checkbox ada
+    if (checkbox) {
+        checkbox.addEventListener('change', function() {
+            checkDisclaimerStatus();
+            // Jika user centang, langsung kirim update ke navigasi
+            if (this.checked && statusDiv) statusDiv.innerHTML = '';
+        });
     }
-}
 
-// Hanya tambahkan listener checkbox jika elemennya ada
-if (checkbox) {
-    checkbox.addEventListener('change', checkDisclaimerStatus);
-}
-
-// --- LISTENER UNTUK MENERIMA PERINTAH DARI WEBFLOW ---
-window.addEventListener('message', function(event) {
-    // if (event.origin !== "https://domain-webflow-anda.com") return; 
-
-    if (event.data === 'NEXT_SLIDE') {
-        nextSlide();
-    } else if (event.data === 'PREV_SLIDE') {
-        prevSlide();
-    }
-});
-
-// Menonaktifkan navigasi keyboard (opsional, disarankan agar Webflow yang kontrol)
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight' || e.key === ' ') {
-        e.preventDefault();
-        // Mengirim perintah ke Webflow agar tombolnya terkontrol di sana
-        if (window.parent) {
-             window.parent.postMessage('NEXT_SLIDE', '*');
+    // --- LISTENER DARI WEBFLOW ---
+    window.addEventListener('message', function(event) {
+        if (event.data === 'NEXT_SLIDE') {
+            nextSlide();
+        } else if (event.data === 'PREV_SLIDE') {
+            prevSlide();
         }
-    } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        if (window.parent) {
-             window.parent.postMessage('PREV_SLIDE', '*');
-        }
-    }
-});
+    });
 
-// Inisialisasi slide (Ini adalah baris penting yang menampilkan slide pertama)
-updateSlide();
+    // Navigasi Keyboard
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ') {
+            e.preventDefault();
+            nextSlide(); // Langsung panggil nextSlide lokal
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            prevSlide();
+        }
+    });
+
+    // Jalankan pertama kali
+    updateSlide();
 </script>
 </body>
 </html>
